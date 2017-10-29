@@ -56,7 +56,7 @@
 // your best effort to read chapter 4 before asking USB questions!
 
 
-// #define USBHOST_PRINT_DEBUG
+//#define USBHOST_PRINT_DEBUG
 
 /************************************************/
 /*  Data Types                                  */
@@ -326,6 +326,12 @@ public:
 	// check if device is bound/active/online
 	// query vid, pid
 	// query string: manufacturer, product, serial number
+
+
+	// The device this object instance is bound to.  In words, this
+	// is the specific device this driver is using.  When not bound
+	// to any device, this must be NULL.
+	Device_t *device;
 protected:
 	USBDriver() : next(NULL), device(NULL) {}
 	// Check if a driver wishes to claim a device or interface or group
@@ -370,10 +376,6 @@ protected:
 	// drivers are linked from that Device_t drivers list.
 	USBDriver *next;
 
-	// The device this object instance is bound to.  In words, this
-	// is the specific device this driver is using.  When not bound
-	// to any device, this must be NULL.
-	Device_t *device;
 
 	friend class USBHost;
 };
@@ -474,6 +476,32 @@ private:
 	portbitmask_t debounce_in_use;
 	static volatile bool reset_busy;
 };
+
+
+class GenericUSB : public USBDriver {
+public:
+	GenericUSB(USBHost &host) { init(); }
+	GenericUSB(USBHost *host) { init(); }
+	int      available();
+	int      read();
+protected:
+	virtual bool claim(Device_t *device, int type, const uint8_t *descriptors, uint32_t len);
+	virtual void control(const Transfer_t *transfer);
+	virtual void disconnect();
+	static void callback(const Transfer_t *transfer);
+	void new_data(const Transfer_t *transfer);
+	void init();
+private:
+	void update();
+	uint16_t convert_to_unicode(uint32_t mod, uint32_t key);
+	Pipe_t *datapipe;
+	setup_t setup;
+	uint8_t report[8];
+	uint8_t prev_report[8];
+	Pipe_t mypipes[2] __attribute__ ((aligned(32)));
+	Transfer_t mytransfers[4] __attribute__ ((aligned(32)));
+};
+
 
 class KeyboardController : public USBDriver {
 public:

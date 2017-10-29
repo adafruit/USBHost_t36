@@ -5,30 +5,25 @@
 #include "USBHost_t36.h"
 
 USBHost myusb;
-USBHub hub1(myusb);
-USBHub hub2(myusb);
-USBHub hub3(myusb);
-KeyboardController keyboard1(myusb);
-KeyboardController keyboard2(myusb);
-MIDIDevice midi1(myusb);
+GenericUSB usbdev(myusb);
 
 void setup()
 {
 	while (!Serial) ; // wait for Arduino Serial Monitor
 	Serial.println("USB Host Testing");
 	myusb.begin();
-	keyboard1.attachPress(OnPress);
-	keyboard2.attachPress(OnPress);
-	midi1.setHandleNoteOff(OnNoteOff);
-	midi1.setHandleNoteOn(OnNoteOn);
-	midi1.setHandleControlChange(OnControlChange);
 }
 
 
 void loop()
 {
 	myusb.Task();
-	midi1.read();
+ //Serial.print('.');
+ if (usbdev.device) {
+  Serial.println(usbdev.device->idVendor, HEX);
+  Serial.println(usbdev.device->idProduct, HEX);
+  delay(100);
+ }
 }
 
 
