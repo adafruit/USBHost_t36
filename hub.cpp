@@ -29,11 +29,15 @@
 // begin responding to address zero.
 volatile bool USBHub::reset_busy = false;
 
+#define print   USBHost::print_
+#define println USBHost::println_
+
 void USBHub::init()
 {
 	contribute_Devices(mydevices, sizeof(mydevices)/sizeof(Device_t));
 	contribute_Pipes(mypipes, sizeof(mypipes)/sizeof(Pipe_t));
 	contribute_Transfers(mytransfers, sizeof(mytransfers)/sizeof(Transfer_t));
+	contribute_String_Buffers(mystring_bufs, sizeof(mystring_bufs)/sizeof(strbuf_t));
 	driver_ready_for_device(this);
 }
 
@@ -202,7 +206,7 @@ void USBHub::send_setreset(uint32_t port)
 
 static uint32_t lowestbit(uint32_t bitmask)
 {
-	return 31 - __builtin_clz(bitmask);
+	return __builtin_ctz(bitmask);
 }
 
 void USBHub::control(const Transfer_t *transfer)
@@ -210,6 +214,7 @@ void USBHub::control(const Transfer_t *transfer)
 	println("USBHub control callback");
 	print_hexbytes(transfer->buffer, transfer->length);
 
+	sending_control_transfer = 0;
 	uint32_t port = transfer->setup.wIndex;
 	uint32_t mesg = transfer->setup.word1;
 
@@ -265,7 +270,7 @@ void USBHub::control(const Transfer_t *transfer)
 	// allow only a single control transfer to occur at once
 	// which isn't fast, but requires only 3 Transfer_t and
 	// allows reusing the setup and other buffers
-	sending_control_transfer = 0;
+	if (sending_control_transfer) return;
 	if (send_pending_poweron) {
 		send_poweron(lowestbit(send_pending_poweron));
 	} else if (send_pending_clearstatus_connect) {

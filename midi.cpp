@@ -24,11 +24,14 @@
 #include <Arduino.h>
 #include "USBHost_t36.h"  // Read this header first for key info
 
+#define print   USBHost::print_
+#define println USBHost::println_
 
 void MIDIDevice::init()
 {
 	contribute_Pipes(mypipes, sizeof(mypipes)/sizeof(Pipe_t));
 	contribute_Transfers(mytransfers, sizeof(mytransfers)/sizeof(Transfer_t));
+	contribute_String_Buffers(mystring_bufs, sizeof(mystring_bufs)/sizeof(strbuf_t));
 	handleNoteOff = NULL;
 	handleNoteOn = NULL;
 	handleVelocityChange = NULL;

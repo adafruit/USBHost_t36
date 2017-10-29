@@ -97,6 +97,9 @@ static void remove_from_async_followup_list(Transfer_t *transfer);
 static void add_to_periodic_followup_list(Transfer_t *first, Transfer_t *last);
 static void remove_from_periodic_followup_list(Transfer_t *transfer);
 
+#define print   USBHost::print_
+#define println USBHost::println_
+
 void USBHost::begin()
 {
 	// Teensy 3.6 has USB host power controlled by PTE6
@@ -247,7 +250,7 @@ void USBHost::isr()
 	uint32_t stat = USBHS_USBSTS;
 	USBHS_USBSTS = stat; // clear pending interrupts
 	//stat &= USBHS_USBINTR; // mask away unwanted interrupts
-#if 1
+#if 0
 	println();
 	println("ISR: ", stat, HEX);
 	//if (stat & USBHS_USBSTS_UI)  println(" USB Interrupt");
@@ -271,7 +274,7 @@ void USBHost::isr()
 #endif
 
 	if (stat & USBHS_USBSTS_UAI) { // completed qTD(s) from the async schedule
-		println("Async Followup");
+		//println("Async Followup");
 		//print(async_followup_first, async_followup_last);
 		Transfer_t *p = async_followup_first;
 		while (p) {
@@ -289,7 +292,7 @@ void USBHost::isr()
 		//print(async_followup_first, async_followup_last);
 	}
 	if (stat & USBHS_USBSTS_UPI) { // completed qTD(s) from the periodic schedule
-		println("Periodic Followup");
+		//println("Periodic Followup");
 		Transfer_t *p = periodic_followup_first;
 		while (p) {
 			if (followup_Transfer(p)) {
@@ -393,13 +396,13 @@ void USBHost::isr()
 
 void USBDriverTimer::start(uint32_t microseconds)
 {
-#ifdef USBHOST_PRINT_DEBUG
-	Serial.print("start_timer, us = ");
-	Serial.print(microseconds);
-	Serial.print(", driver = ");
-	Serial.print((uint32_t)driver, HEX);
-	Serial.print(", this = ");
-	Serial.println((uint32_t)this, HEX);
+#if 0
+	USBHost::print_("start_timer, us = ");
+	USBHost::print_(microseconds);
+	USBHost::print_(", driver = ");
+	USBHost::print_((uint32_t)driver, HEX);
+	USBHost::print_(", this = ");
+	USBHost::println_((uint32_t)this, HEX);
 #endif
 	if (!driver) return;
 	if (microseconds < 100) return; // minimum timer duration
@@ -455,6 +458,39 @@ void USBDriverTimer::start(uint32_t microseconds)
 	next = NULL;
 	prev = list;
 	list->next = this;
+}
+
+void USBDriverTimer::stop()
+{
+	__disable_irq();
+	if (active_timers) {
+		if (active_timers == this) {
+			USBHS_GPTIMER1CTL = 0;
+			if (next) {
+				uint32_t usec_til_next = USBHS_GPTIMER1CTL & 0xFFFFFF;
+				usec_til_next += next->usec;
+				next->usec = usec_til_next;
+				USBHS_GPTIMER1LD = usec_til_next;
+				USBHS_GPTIMER1CTL = USBHS_GPTIMERCTL_RST | USBHS_GPTIMERCTL_RUN;
+				next->prev = NULL;
+				active_timers = next;
+			} else {
+				active_timers = NULL;
+			}
+		} else {
+			for (USBDriverTimer *t = active_timers->next; t; t = t->next) {
+				if (t == this) {
+					t->prev->next = t->next;
+					if (t->next) {
+						t->next->usec += t->usec;
+						t->next->prev = t->prev;
+					}
+					break;
+				}
+			}
+		}
+	}
+	__enable_irq();
 }
 
 
@@ -599,7 +635,7 @@ bool USBHost::queue_Control_Transfer(Device_t *dev, setup_t *setup, void *buf, U
 	Transfer_t *transfer, *data, *status;
 	uint32_t status_direction;
 
-	println("new_Control_Transfer");
+	//println("new_Control_Transfer");
 	if (setup->wLength > 16384) return false; // max 16K data for control
 	transfer = allocate_Transfer();
 	if (!transfer) {
@@ -654,7 +690,7 @@ bool USBHost::queue_Data_Transfer(Pipe_t *pipe, void *buffer, uint32_t len, USBD
 
 	// TODO: option for zero length packet?  Maybe in Pipe_t fields?
 
-	println("new_Data_Transfer");
+	//println("new_Data_Transfer");
 	// allocate qTDs
 	transfer = allocate_Transfer();
 	if (!transfer) return false;
@@ -757,8 +793,8 @@ bool USBHost::queue_Transfer(Pipe_t *pipe, Transfer_t *transfer)
 
 bool USBHost::followup_Transfer(Transfer_t *transfer)
 {
-	print("  Followup ", (uint32_t)transfer, HEX);
-	println("    token=", transfer->qtd.token, HEX);
+	//print("  Followup ", (uint32_t)transfer, HEX);
+	//println("    token=", transfer->qtd.token, HEX);
 
 	if (!(transfer->qtd.token & 0x80)) {
 		// TODO: check error status
@@ -998,10 +1034,10 @@ bool USBHost::allocate_interrupt_pipe_bandwidth(Pipe_t *pipe, uint32_t maxlen, u
 				best_offset = offset;
 			}
 		}
-		print(" best_bandwidth = ");
-		print(best_bandwidth);
-		print(", at offset = ");
-		println(best_offset);
+		print(" best_bandwidth = ", best_bandwidth);
+		//print(best_bandwidth);
+		println(", at offset = ", best_offset);
+		//println(best_offset);
 		// a 125 us micro frame can fit 7500 bytes, or 234 of our 32-byte units
 		// fail if the best found needs more than 80% (234 * 0.8) in any uframe
 		if (best_bandwidth > 187) return false;
@@ -1064,12 +1100,12 @@ bool USBHost::allocate_interrupt_pipe_bandwidth(Pipe_t *pipe, uint32_t maxlen, u
 				}
 			}
 		}
-		print(" best_bandwidth = ");
-		println(best_bandwidth);
-		print(", at offset = ");
-		print(best_offset);
-		print(", shift= ");
-		println(best_shift);
+		print(" best_bandwidth = ", best_bandwidth);
+		//println(best_bandwidth);
+		print(", at offset = ", best_offset);
+		//print(best_offset);
+		println(", shift= ", best_shift);
+		//println(best_shift);
 		// a 125 us micro frame can fit 7500 bytes, or 234 of our 32-byte units
 		// fail if the best found needs more than 80% (234 * 0.8) in any uframe
 		if (best_bandwidth > 187) return false;
@@ -1093,7 +1129,7 @@ bool USBHost::allocate_interrupt_pipe_bandwidth(Pipe_t *pipe, uint32_t maxlen, u
 void USBHost::add_qh_to_periodic_schedule(Pipe_t *pipe)
 {
 	// quick hack for testing, just put it into the first table entry
-	println("add_qh_to_periodic_schedule:");
+	//println("add_qh_to_periodic_schedule: ", (uint32_t)pipe, HEX);
 #if 0
 	pipe->qh.horizontal_link = periodictable[0];
 	periodictable[0] = (uint32_t)&(pipe->qh) | 2; // 2=QH
@@ -1101,31 +1137,54 @@ void USBHost::add_qh_to_periodic_schedule(Pipe_t *pipe)
 #else
 	uint32_t interval = pipe->periodic_interval;
 	uint32_t offset = pipe->periodic_offset;
-	println("  interval = ", interval);
-	println("  offset =   ", offset);
+	//println("  interval = ", interval);
+	//println("  offset =   ", offset);
 
-	// TODO: does this really make an inverted tree like EHCI figure 4-18, page 93
+	// By an interative miracle, hopefully make an inverted tree of EHCI figure 4-18, page 93
 	for (uint32_t i=offset; i < PERIODIC_LIST_SIZE; i += interval) {
+		//print("    old slot ", i);
+		//print(": ");
+		//print_qh_list((Pipe_t *)(periodictable[i] & 0xFFFFFFE0));
 		uint32_t num = periodictable[i];
 		Pipe_t *node = (Pipe_t *)(num & 0xFFFFFFE0);
 		if ((num & 1) || ((num & 6) == 2 && node->periodic_interval < interval)) {
-			println("  add to slot ", i);
+			//println("  add to slot ", i);
 			pipe->qh.horizontal_link = num;
 			periodictable[i] = (uint32_t)&(pipe->qh) | 2; // 2=QH
 		} else {
-			println("  traverse list ", i);
+			//println("  traverse list ", i);
 			// TODO: skip past iTD, siTD when/if we support isochronous
 			while (node->periodic_interval >= interval) {
+				if (node == pipe) goto nextslot;
+				//print("  num ", num, HEX);
+				//print("  node ", (uint32_t)node, HEX);
+				//println("->", node->qh.horizontal_link, HEX);
 				if (node->qh.horizontal_link & 1) break;
 				num = node->qh.horizontal_link;
 				node = (Pipe_t *)(num & 0xFFFFFFE0);
 			}
-			pipe->qh.horizontal_link = num;
+			Pipe_t *n = node;
+			do {
+				if (n == pipe) goto nextslot;
+				n = (Pipe_t *)(n->qh.horizontal_link & 0xFFFFFFE0);
+			} while (n != NULL);
+			//print("  adding at node ", (uint32_t)node, HEX);
+			//print(", num=", num, HEX);
+			//println(", node->qh.horizontal_link=", node->qh.horizontal_link, HEX);
+			pipe->qh.horizontal_link = node->qh.horizontal_link;
 			node->qh.horizontal_link = (uint32_t)pipe | 2; // 2=QH
+			// TODO: is it really necessary to keep doing the outer
+			// loop?  Does adding it here satisfy all cases?  If so
+			// we could avoid extra work by just returning here.
 		}
+		nextslot:
+		//print("    new slot ", i);
+		//print(": ");
+		//print_qh_list((Pipe_t *)(periodictable[i] & 0xFFFFFFE0));
+		{}
 	}
 #endif
-#if 1
+#if 0
 	println("Periodic Schedule:");
 	for (uint32_t i=0; i < PERIODIC_LIST_SIZE; i++) {
 		if (i < 10) print(" ");
