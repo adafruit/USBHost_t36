@@ -62,6 +62,7 @@ void loop()
         // If this is a new Serial device.
         if (drivers[i] == &userial) {
           // Lets try first outputting something to our USerial to see if it will go out...
+          Serial.print("Starting with baud: "); Serial.println(baud);
           userial.begin(baud);
 
         }
@@ -123,6 +124,7 @@ void loop()
 
         while (Serial.read() != -1);
       } else { 
+        Serial.println("plain data");
         userial.write(ch);
       }
     }
@@ -134,7 +136,7 @@ void loop()
   }
 
   while (userial.available()) {
-//    Serial.println("USerial Available");
+    Serial.println("USerial Available");
 
     Serial.write(userial.read());
   }
@@ -314,4 +316,3 @@ int ax12ReadPacket(int length) {
     return 1;
   }
 }
-
