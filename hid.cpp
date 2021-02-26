@@ -55,6 +55,7 @@ bool USBHIDParser::claim(Device_t *dev, int type, const uint8_t *descriptors, ui
 	uint32_t numendpoint = descriptors[4];
 	if (numendpoint < 1 || numendpoint > 2) return false;
 	if (descriptors[5] != 3) return false; // bInterfaceClass, 3 = HID
+	println(" bInterfaceNumber =   ", descriptors[2]);
 	println(" bInterfaceClass =    ", descriptors[5]);
 	println(" bInterfaceSubClass = ", descriptors[6]);
 	println(" bInterfaceProtocol = ", descriptors[7]);
@@ -148,6 +149,7 @@ bool USBHIDParser::claim(Device_t *dev, int type, const uint8_t *descriptors, ui
 		topusage_drivers[i] = NULL;
 	}
 	// request the HID report descriptor
+	bInterfaceNumber = descriptors[2];	// save away the interface number; 
 	mk_setup(setup, 0x81, 6, 0x2200, descriptors[2], descsize); // get report desc
 	queue_Control_Transfer(dev, &setup, descriptor, this);
 	return true;
@@ -165,7 +167,8 @@ void USBHIDParser::control(const Transfer_t *transfer)
 		println("  got report descriptor");
 		parse();
 		queue_Data_Transfer(in_pipe, report, in_size, this);
-		if (device->idVendor == 0x054C && device->idProduct == 0x0268) {
+		if (device->idVendor == 0x054C && 
+				((device->idProduct == 0x0268) || (device->idProduct == 0x042F)/* || (device->idProduct == 0x03D5)*/)) {
 			println("send special PS3 feature command");
 			mk_setup(setup, 0x21, 9, 0x03F4, 0, 4); // ps3 tell to send report 1?
 			static uint8_t ps3_feature_F4_report[] = {0x42, 0x0c, 0x00, 0x00};
@@ -205,17 +208,19 @@ void USBHIDParser::disconnect()
 // Called when the HID device sends a report
 void USBHIDParser::in_data(const Transfer_t *transfer)
 {
-	/*Serial.printf("HID: ");
+	/*USBHDBGSerial.printf("HID: ");
 	uint8_t *pb = (uint8_t*)transfer->buffer;
 	for (uint8_t i = 0; i < transfer->length; i++) {
-		Serial.printf("%x ",pb[i]);
+		USBHDBGSerial.printf("%x ",pb[i]);
 	}
-	Serial.printf("\n"); */
+	USBHDBGSerial.printf("\n"); */
 
+	/*
 	print("HID: ");
 	print(use_report_id);
 	print(" - ");
 	print_hexbytes(transfer->buffer, transfer->length);
+	*/
 	const uint8_t *buf = (const uint8_t *)transfer->buffer;
 	uint32_t len = transfer->length;
 
@@ -247,6 +252,14 @@ void USBHIDParser::out_data(const Transfer_t *transfer)
 		topusage_drivers[0]->hid_process_out_data(transfer);
 	}
 }
+
+void USBHIDParser::timer_event(USBDriverTimer *whichTimer)
+{
+	if (topusage_drivers[0]) {
+		topusage_drivers[0]->hid_timer_event(whichTimer);
+	}	
+}
+
 
 bool USBHIDParser::sendPacket(const uint8_t *buffer, int cb) {
 	if (!out_size || !out_pipe) return false;	
@@ -402,6 +415,7 @@ USBHIDInput * USBHIDParser::find_driver(uint32_t topusage)
 		}
 		driver = driver->next;
 	}
+	println("No Driver claimed topusage: ", topusage, HEX);
 	return NULL;
 }
 
@@ -587,7 +601,7 @@ void USBHIDParser::parse(uint16_t type_and_report_id, const uint8_t *data, uint3
 						}
 						uminmax = true;
 					}
-					//Serial.printf("TU:%x US:%x %x %d %d: C:%d, %d, MM:%d, %x %x\n", topusage, usage_page, val, logical_min, logical_max, 
+					//USBHDBGSerial.printf("TU:%x US:%x %x %d %d: C:%d, %d, MM:%d, %x %x\n", topusage, usage_page, val, logical_min, logical_max, 
 					//			report_count, usage_count, uminmax, usage[0], usage[1]);
 					for (uint32_t i=0; i < report_count; i++) {
 						uint32_t u;
