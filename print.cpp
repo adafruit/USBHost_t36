@@ -31,6 +31,8 @@
 
 #ifdef USBHOST_PRINT_DEBUG
 
+uint16_t g_USB_VID, g_USB_PID;
+
 void USBHost::print_(const Transfer_t *transfer)
 {
 	if (!((uint32_t)transfer & 0xFFFFFFE0)) return;
@@ -208,6 +210,10 @@ void USBHost::print_device_descriptor(const uint8_t *p)
 	}
 	Serial.printf("    VendorID = %04X, ProductID = %04X, Version = %04X",
 		p[8] | (p[9] << 8), p[10] | (p[11] << 8), p[12] | (p[13] << 8));
+
+	g_USB_VID = p[8] | (p[9] << 8);
+	g_USB_PID = p[10] | (p[11] << 8);
+
 	Serial.println();
 	Serial.print("    Class/Subclass/Protocol = ");
 	print_class_subclass_protocol(p[4], p[5], p[6]);
